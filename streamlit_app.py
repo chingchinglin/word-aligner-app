@@ -1,63 +1,49 @@
 import streamlit as st
 import pandas as pd
-import os
-import io
-import base64
-import requests
+import nltk
+from run_batch import run_alignment_batch  # 確保 run_batch.py 有這個 function
 
-from run_batch import run_alignment_batch  # 假設你有這個 function
+# 下載 WordNet 資源
+nltk.download('wordnet')
+nltk.download('omw-1.4')
 
-st.set_page_config(page_title="單字對齊標記工具", layout="centered")
+st.title("Word Aligner App")
 
-st.title("📘 單字例句對齊與檢查工具")
+# 上傳或輸入網址
+upload_option = st.radio("選擇輸入方式：", ("上傳檔案", "輸入 URL"))
 
-# --- 上傳檔案區塊 ---
-uploaded_file = st.file_uploader("⬆️ 上傳你的 .csv 檔案", type=["csv"])
-url_input = st.text_input("或貼上雲端檔案（Google Sheets、GitHub raw 等）URL")
+if upload_option == "上傳檔案":
+    uploaded_file = st.file_uploader("上傳 CSV 或 Excel 檔案", type=["csv", "xlsx"])
+    if uploaded_file is not None:
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+elif upload_option == "輸入 URL":
+    url = st.text_input("輸入檔案的 URL")
+    if url:
+        try:
+            if url.endswith(".csv"):
+                df = pd.read_csv(url)
+            else:
+                df = pd.read_excel(url)
+        except Exception as e:
+            st.error(f"讀取檔案失敗: {e}")
+            df = None
+else:
+    df = None
 
-# --- 下載與解析 CSV ---
-def read_csv_file(file):
-    try:
-        df = pd.read_csv(file)
-        return df
-    except Exception as e:
-        st.error(f"❌ 無法讀取檔案: {e}")
-        return None
+if 'df' in locals() and df is not None:
+    st.write("原始資料：", df.head())
 
-def fetch_csv_from_url(url):
-    try:
-        res = requests.get(url)
-        res.raise_for_status()
-        return pd.read_csv(io.StringIO(res.text))
-    except Exception as e:
-        st.error(f"❌ 無法從網址取得檔案: {e}")
-        return None
+    if st.button("執行對齊"):
+        try:
+            result_df = run_alignment_batch(df)
+            st.success("對齊完成！")
+            st.dataframe(result_df)
 
-# --- 資料輸入與處理 ---
-df = None
-if uploaded_file:
-    df = read_csv_file(uploaded_file)
-elif url_input:
-    df = fetch_csv_from_url(url_input)
-
-if df is not None:
-    st.success("✅ 成功讀取檔案！以下是預覽：")
-    st.dataframe(df.head())
-
-    if st.button("🚀 開始處理並標記對齊"):
-        with st.spinner("處理中...請稍候"):
-            try:
-                result_df = run_alignment_batch(df)  # 假設此函數會回傳處理後 DataFrame
-
-                st.success("✅ 處理完成！以下是部分結果：")
-                st.dataframe(result_df.head())
-
-                # 建立下載連結
-                output = io.StringIO()
-                result_df.to_csv(output, index=False)
-                b64 = base64.b64encode(output.getvalue().encode()).decode()
-                href = f'<a href="data:file/csv;base64,{b64}" download="output_aligned.csv">📥 下載處理後檔案</a>'
-                st.markdown(href, unsafe_allow_html=True)
-
-            except Exception as e:
-                st.error(f"❌ 執行失敗: {e}")
+            # 提供下載
+            csv = result_df.to_csv(index=False).encode('utf-8')
+            st.download_button("下載結果 CSV", csv, "aligned_result.csv", "text/csv")
+        except Exception as e:
+            st.error(f"處理失敗: {e}")
