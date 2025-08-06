@@ -2,7 +2,6 @@ import re
 from nltk.stem import WordNetLemmatizer
 
 def normalize_sentence(sent):
-    # 去除標點與所有格 ’s/'s
     text = re.sub(r"[,.?;:!\"\'\(\)\[\]\{\}\-–—…]", " ", sent)
     text = re.sub(r"\b(\w+)'s\b", r"\1", text)
     tokens = text.lower().split()
@@ -18,10 +17,8 @@ def find_span(target_tokens, sent_tokens):
 
 def process_row(word, sent):
     lemmatizer = WordNetLemmatizer()
-    # normalize
     wtoks = [lemmatizer.lemmatize(t) for t in normalize_sentence(word)]
     stoks = normalize_sentence(sent)
-    # lemmatize all
     stoks_lem = [lemmatizer.lemmatize(t) for t in stoks]
     span = find_span(wtoks, stoks_lem)
     if span:
@@ -32,7 +29,6 @@ def process_row(word, sent):
         return "-", "-", "-", "人工處理"
 
 def run_alignment_batch(df, col_word, col_basic, col_adv):
-    # 初始化結果欄位
     df["index_combined"] = ""
     df["match_form_combined"] = ""
     df["status_combined"] = ""
