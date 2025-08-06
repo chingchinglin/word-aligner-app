@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import nltk
-from run_batch import run_alignment_batch  # 確保 run_batch.py 有這個 function
+from run_batch import process_dataframe  # ✅ 修改為正確的函數名稱
 
 # 下載 WordNet 資源
 nltk.download('wordnet')
@@ -38,7 +38,7 @@ if 'df' in locals() and df is not None:
 
     if st.button("執行對齊"):
         try:
-            result_df = run_alignment_batch(df)
+            result_df = process_dataframe(df)  # ✅ 使用正確的函數
             st.success("對齊完成！")
             st.dataframe(result_df)
 
