@@ -1,46 +1,66 @@
 import streamlit as st
 import pandas as pd
-from run_batch import process_file
+import spacy
+import os
+from aligner import align_word_or_phrase
 
-st.set_page_config(page_title="單字與例句對齊工具", layout="wide")
+# Load SpaCy model
+@st.cache_resource
+def load_model():
+    return spacy.load("en_core_web_sm")
+nlp = load_model()
 
-# UI 顯示區塊
-st.title("📚 單字與例句對齊工具")
-st.markdown("請上傳包含單字與例句的 Excel 或 CSV 檔案，我們會自動標記出單字在例句中的位置。")
+st.title("🧠 Word/Phrase Position Aligner")
+st.markdown("Upload an Excel or CSV file with the following columns:")
+st.code("Word or Phrase | Basic Sentence | Advanced Sentence")
 
-uploaded_file = st.file_uploader("請選擇檔案：", type=["xlsx", "csv"])
+uploaded_file = st.file_uploader("Upload your file", type=["xlsx", "csv"])
 
-if uploaded_file:
+if uploaded_file is not None:
     try:
-        # 自動判斷副檔名
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file)
 
-        st.success("✅ 檔案已成功上傳，開始處理中⋯⋯")
+        required_columns = ["Word or Phrase", "Basic Sentence", "Advanced Sentence"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
 
-        # 執行處理
-        processed_df = process_file(df)
+        if missing_columns:
+            st.error(f"❗ Missing required columns: {', '.join(missing_columns)}")
+        else:
+            basic_starts, basic_ends = [], []
+            adv_starts, adv_ends = [], []
 
-        # 顯示處理後結果
-        st.markdown("### 🔍 標註結果預覽")
-        st.dataframe(processed_df)
+            for _, row in df.iterrows():
+                word = row["Word or Phrase"]
+                basic_sentence = row["Basic Sentence"]
+                adv_sentence = row["Advanced Sentence"]
 
-        # 提供下載連結
-        @st.cache_data
-        def convert_df(df):
-            return df.to_csv(index=False).encode('utf-8-sig')
+                basic_start, basic_end = align_word_or_phrase(word, basic_sentence, nlp)
+                adv_start, adv_end = align_word_or_phrase(word, adv_sentence, nlp)
 
-        csv = convert_df(processed_df)
-        st.download_button(
-            label="📥 下載標註結果 (CSV)",
-            data=csv,
-            file_name="aligned_result.csv",
-            mime="text/csv",
-        )
+                basic_starts.append(basic_start)
+                basic_ends.append(basic_end)
+                adv_starts.append(adv_start)
+                adv_ends.append(adv_end)
+
+            df["Basic Start"] = basic_starts
+            df["Basic End"] = basic_ends
+            df["Advanced Start"] = adv_starts
+            df["Advanced End"] = adv_ends
+
+            st.success("✅ Alignment complete!")
+            st.dataframe(df)
+
+            # Download result
+            csv = df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                label="Download Result as CSV",
+                data=csv,
+                file_name="aligned_output.csv",
+                mime="text/csv",
+            )
 
     except Exception as e:
-        st.error(f"❌ 發生錯誤：{e}")
-else:
-    st.info("👈 請先上傳檔案開始處理。")
+        st.error(f"❌ Error processing file: {str(e)}")
