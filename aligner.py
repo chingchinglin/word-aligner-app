@@ -1,13 +1,18 @@
 import nltk
 
-# 自動下載 nltk 必要資源（punkt、wordnet、averaged_perceptron_tagger）
-nltk_packages = ["punkt", "wordnet", "averaged_perceptron_tagger"]
+# 自動下載必要 nltk 資源
+nltk_dependencies = [
+    ("tokenizers/punkt", "punkt"),
+    ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+    ("corpora/wordnet", "wordnet"),
+]
 
-for pkg in nltk_packages:
+for path, pkg in nltk_dependencies:
     try:
-        nltk.data.find(f'tokenizers/{pkg}' if pkg == "punkt" else f'corpora/{pkg}')
+        nltk.data.find(path)
     except LookupError:
         nltk.download(pkg)
+
 
 
 import re
