@@ -1,51 +1,39 @@
-import spacy
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet
-import re
+# aligner.py
 
-# 嘗試載入 spaCy 模型
+import spacy
+
+# 1. 載入模型：若沒安裝就立刻報錯，避免後面 subprocess download 失敗
 try:
     nlp = spacy.load("en_core_web_sm")
-except OSError:
-    raise OSError("❌ 找不到 spaCy 模型 'en_core_web_sm'。請確認 requirements.txt 已包含模型下載連結，並重新部署 App。")
+except OSError as e:
+    raise RuntimeError(
+        "❌ 找不到 spaCy 模型 en_core_web_sm。"
+        " 請確認你的 requirements.txt 已包含：\n"
+        "    en-core-web-sm @ "
+        "https://github.com/explosion/spacy-models/"
+        "releases/download/en_core_web_sm-3.7.1/"
+        "en_core_web_sm-3.7.1.tar.gz\n"
+        "然後重新部署後再執行。"
+    ) from e
 
-lemmatizer = WordNetLemmatizer()
-
-# 匹配範圍正規化用（忽略標點與所有格）
-def normalize(text):
-    return re.sub(r"[^\w\s]", "", text.lower().replace("'s", ""))
-
-def lemmatize_word(word, pos_tag):
-    pos = get_wordnet_pos(pos_tag)
-    return lemmatizer.lemmatize(word, pos=pos) if pos else word
-
-def get_wordnet_pos(treebank_tag):
-    if treebank_tag.startswith('J'):
-        return wordnet.ADJ
-    elif treebank_tag.startswith('V'):
-        return wordnet.VERB
-    elif treebank_tag.startswith('N'):
-        return wordnet.NOUN
-    elif treebank_tag.startswith('R'):
-        return wordnet.ADV
-    else:
-        return None
-
-def find_match_indices(sentence, target_phrase):
+def find_match_indices(word: str, sentence: str):
+    """
+    基於 spaCy 斷詞與詞形還原，找出 word 在 sentence 中的 start/end 位置（以 token index 計）。
+    若比對不到，回傳空 list，呼叫端可轉為「人工處理」。
+    """
     doc = nlp(sentence)
-    tokens = [token.text for token in doc]
-    tokens_lemma = [lemmatize_word(token.text, token.tag_) for token in doc]
+    word_lower = word.lower()
+    results = []
 
-    # 處理目標單字或片語
-    phrase_doc = nlp(target_phrase)
-    phrase_tokens = [token.text for token in phrase_doc]
-    phrase_lemmas = [lemmatize_word(token.text, token.tag_) for token in phrase_doc]
+    for token in doc:
+        # 比對 lemma 或原形
+        if token.lemma_.lower() == word_lower:
+            results.append((token.i + 1, token.i + 1))  # spaCy token.i 從 0 開始，+1 改成 1-based
 
-    phrase_len = len(phrase_lemmas)
+    # 如果是 multi-token phrase，可額外擴充連續比對 (略)
+    return results
 
-    for i in range(len(tokens_lemma) - phrase_len + 1):
-        if tokens_lemma[i:i+phrase_len] == phrase_lemmas:
-            return i + 1, i + phrase_len  # index from 1
+# 如果你有多個 function，也通通放在這裡
+# def another_helper(...):
+#     ...
 
-    # 若找不到，回傳 None，代表需人工處理
-    return None, None
