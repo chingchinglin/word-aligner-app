@@ -1,16 +1,12 @@
 import re
 import spacy
-import nltk
-from nltk.stem import WordNetLemmatizer
+import spacy.cli
 
-# 嘗試下載 wordnet 資源（只在第一次啟動時下載）
 try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
-
-nlp = spacy.load("en_core_web_sm")
-lemmatizer = WordNetLemmatizer()
+    nlp = spacy.load("en_core_web_sm")
+except:
+    spacy.cli.download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 def tokenize(sentence):
     sentence = re.sub(r"[^\w\s]", "", sentence)
@@ -18,7 +14,8 @@ def tokenize(sentence):
     return sentence.strip().split()
 
 def lemmatize(word):
-    return lemmatizer.lemmatize(word.lower())
+    doc = nlp(word)
+    return doc[0].lemma_ if doc else word.lower()
 
 def align_word_in_sentence(word_or_phrase, sentence):
     tokens = tokenize(sentence)
