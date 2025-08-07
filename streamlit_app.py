@@ -1,34 +1,61 @@
-
-import streamlit as st
+import re
 import pandas as pd
-import nltk
-from run_batch import run_alignment_batch
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import wordpunct_tokenize
 
-nltk.download('wordnet')
-nltk.download('omw-1.4')
+lemmatizer = WordNetLemmatizer()
 
-st.title("Word‑Example Aligner Tool (Gemini 版)")
+def normalize(word):
+    return lemmatizer.lemmatize(word.lower())
 
-upload = st.file_uploader("上傳 CSV 或 Excel 檔案", type=["csv","xlsx"])
-if upload:
-    if upload.name.endswith(".csv"):
-        df = pd.read_csv(upload)
+def tokenize(text):
+    return [normalize(w) for w in wordpunct_tokenize(text)]
+
+def align_single_example(word_or_phrase, sentence, use_ai=False):
+    phrase_tokens = tokenize(word_or_phrase)
+    sentence_tokens = tokenize(sentence)
+
+    phrase_len = len(phrase_tokens)
+    sentence_len = len(sentence_tokens)
+
+    for i in range(sentence_len - phrase_len + 1):
+        window = sentence_tokens[i:i + phrase_len]
+        if window == phrase_tokens:
+            return i + 1, i + phrase_len, "匹配"  # 索引從 1 開始
+
+    if use_ai:
+        return "-", "-", "AI補足"
     else:
-        df = pd.read_excel(upload)
+        return "-", "-", "人工處理"
 
-    st.write("原始資料預覽：")
-    st.dataframe(df.head())
+def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=False):
+    basic_results = df.apply(
+        lambda row: align_single_example(row[col_word], row[col_basic], use_ai),
+        axis=1
+    )
+    adv_results = df.apply(
+        lambda row: align_single_example(row[col_word], row[col_adv], use_ai),
+        axis=1
+    )
 
-    col_word = st.selectbox("選擇「單字或片語」欄位", df.columns)
-    col_basic = st.selectbox("選擇「基礎例句」欄位", df.columns)
-    col_adv = st.selectbox("選擇「進階例句」欄位", df.columns)
-    use_ai = st.checkbox("啟用 Gemini 模式（當 NLP 無法對齊時，自動補足）", value=True)
+    df["basic_start"] = [r[0] for r in basic_results]
+    df["basic_end"] = [r[1] for r in basic_results]
+    df["status_basic"] = [r[2] for r in basic_results]
 
-    if st.button("執行對齊"):
-        with st.spinner("處理中..."):
-            result = run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=use_ai)
-        st.success("完成 ✅")
-        st.dataframe(result[["word_or_phrase", col_basic, col_adv,
-                             "index_combined", "match_form_combined", "status_combined"]].head(10))
-        csv = result.to_csv(index=False).encode("utf-8")
-        st.download_button("下載對齊結果 CSV", csv, "aligned_result.csv", "text/csv")
+    df["adv_start"] = [r[0] for r in adv_results]
+    df["adv_end"] = [r[1] for r in adv_results]
+    df["status_adv"] = [r[2] for r in adv_results]
+
+    df["index_combined"] = df.apply(lambda row: f"{row['basic_start']}-{row['basic_end']}, {row['adv_start']}-{row['adv_end']}", axis=1)
+    df["match_form_combined"] = df.apply(lambda row: f"{row['status_basic']}, {row['status_adv']}", axis=1)
+
+    def combine_status(row):
+        if row["status_basic"] == row["status_adv"]:
+            return row["status_basic"]
+        else:
+            return f"{row['status_basic']}/{row['status_adv']}"
+
+    df["status_combined"] = df.apply(combine_status, axis=1)
+    df["word_or_phrase"] = df[col_word]
+
+    return df
