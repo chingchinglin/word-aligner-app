@@ -27,5 +27,4 @@ def align_word_in_sentence(word_or_phrase, sentence):
     return "-", "-", "人工處理"
 
 def get_example_alignment():
-    # 預設用來讓 Streamlit 可以啟動，不會報錯
     return align_word_in_sentence("apple", "I ate two apples.")
