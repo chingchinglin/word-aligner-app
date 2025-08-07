@@ -3,71 +3,70 @@ import re
 import nltk
 from nltk.stem import WordNetLemmatizer
 
+# 下載需要的 NLTK 資源
 nltk.download('punkt')
 nltk.download('wordnet')
+nltk.download('omw-1.4')
 
 lemmatizer = WordNetLemmatizer()
 
-
+# 正規化單字（詞形還原＋小寫）
 def normalize(word):
     return lemmatizer.lemmatize(word.lower())
 
-
+# 分詞（忽略標點符號與特殊字元）
 def tokenize(text):
-    return [normalize(w) for w in nltk.word_tokenize(re.sub(r"[^\w\s]", "", text))]
+    # 先移除標點與特殊符號，只保留單字與空格
+    text = re.sub(r"[^\w\s]", "", text)
+    tokens = nltk.word_tokenize(text)
+    return [normalize(w) for w in tokens]
 
-
-def find_span(tokens, target_tokens):
-    for i in range(len(tokens) - len(target_tokens) + 1):
-        if tokens[i:i+len(target_tokens)] == target_tokens:
-            return i + 1, i + len(target_tokens)  # 1-based indexing
-    return None, None
-
-
-def align_single_example(word_or_phrase, sentence, use_ai=False):
-    if not isinstance(word_or_phrase, str) or not isinstance(sentence, str):
-        return "-", "-", "人工處理"
-
+# 對齊單一句子（word_or_phrase 是使用者輸入的單字／片語）
+def align_single_example(word_or_phrase, text, use_ai=True):
     phrase_tokens = tokenize(word_or_phrase)
-    sentence_tokens = tokenize(sentence)
+    sentence_tokens = tokenize(text)
 
-    start, end = find_span(sentence_tokens, phrase_tokens)
+    for i in range(len(sentence_tokens) - len(phrase_tokens) + 1):
+        window = sentence_tokens[i : i + len(phrase_tokens)]
+        if window == phrase_tokens:
+            return i + 1, i + len(phrase_tokens), "精準對齊"
 
-    if start is not None:
-        return str(start), str(end), "OK"
-    elif use_ai:
-        # 模擬 Gemini 模式：找第一個出現的詞，當作 backup
-        for token in phrase_tokens:
-            if token in sentence_tokens:
-                idx = sentence_tokens.index(token)
-                return str(idx + 1), str(idx + 1), "AI補齊"
-        return "-", "-", "AI補齊失敗"
+    if use_ai:
+        return "-", "-", "AI補足"
     else:
         return "-", "-", "人工處理"
 
+# 批次處理整個 DataFrame
+def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=True):
+    basic_results = df.apply(
+        lambda row: align_single_example(row[col_word], row[col_basic], use_ai),
+        axis=1
+    )
+    adv_results = df.apply(
+        lambda row: align_single_example(row[col_word], row[col_adv], use_ai),
+        axis=1
+    )
 
-def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=False):
-    index_basic_list, status_basic_list, match_basic_list = [], [], []
-    index_adv_list, status_adv_list, match_adv_list = [], [], []
+    df["basic_start"] = [r[0] for r in basic_results]
+    df["basic_end"] = [r[1] for r in basic_results]
+    df["status_basic"] = [r[2] for r in basic_results]
 
-    for _, row in df.iterrows():
-        word = row[col_word]
+    df["adv_start"] = [r[0] for r in adv_results]
+    df["adv_end"] = [r[1] for r in adv_results]
+    df["status_adv"] = [r[2] for r in adv_results]
 
-        # 基礎例句
-        start, end, status = align_single_example(word, row[col_basic], use_ai)
-        index_basic_list.append(f"{start}~{end}" if start != "-" else "-")
-        status_basic_list.append(status)
-        match_basic_list.append(row[col_basic])
-
-        # 進階例句
-        start, end, status = align_single_example(word, row[col_adv], use_ai)
-        index_adv_list.append(f"{start}~{end}" if start != "-" else "-")
-        status_adv_list.append(status)
-        match_adv_list.append(row[col_adv])
-
-    df["index_combined"] = [f"{b}|{a}" for b, a in zip(index_basic_list, index_adv_list)]
-    df["status_combined"] = [f"{b}|{a}" for b, a in zip(status_basic_list, status_adv_list)]
-    df["match_form_combined"] = [f"{b}|{a}" for b, a in zip(match_basic_list, match_adv_list)]
-    df["word_or_phrase"] = df[col_word]
+    # 整合欄位（方便在 Streamlit 顯示）
+    df["index_combined"] = df.apply(
+        lambda row: f"{row['basic_start']}~{row['basic_end']} / {row['adv_start']}~{row['adv_end']}",
+        axis=1,
+    )
+    df["match_form_combined"] = df.apply(
+        lambda row: f"{row[col_word]} → {row[col_basic]} / {row[col_adv]}",
+        axis=1,
+    )
+    df["status_combined"] = df.apply(
+        lambda row: f"{row['status_basic']} / {row['status_adv']}",
+        axis=1,
+    )
 
     return df
