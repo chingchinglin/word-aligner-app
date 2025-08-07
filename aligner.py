@@ -1,10 +1,13 @@
 import spacy
 import pandas as pd
+import subprocess
 
+# 嘗試載入 spaCy 模型，如果沒安裝就自動安裝
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    raise RuntimeError("❗請先在本地或部署環境安裝 spaCy 模型：en_core_web_sm")
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+    nlp = spacy.load("en_core_web_sm")
 
 def find_match_indices(word_or_phrase, sentence):
     def tokenize(text):
