@@ -1,3 +1,12 @@
+import nltk
+
+# 保險起見加上這段（避免 Streamlit Cloud 沒自動下載）
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+
 import re
 import pandas as pd
 from nltk.stem import WordNetLemmatizer
