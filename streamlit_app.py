@@ -1,4 +1,3 @@
-
 import streamlit as st
 from aligner import get_example_alignment
 

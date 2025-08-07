@@ -1,15 +1,7 @@
 import re
 import spacy
-import subprocess
 
-def ensure_spacy_model():
-    try:
-        return spacy.load("en_core_web_sm")
-    except OSError:
-        subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-        return spacy.load("en_core_web_sm")
-
-nlp = ensure_spacy_model()
+nlp = spacy.blank("en")
 
 def tokenize(sentence):
     sentence = re.sub(r"[^\w\s]", "", sentence)
