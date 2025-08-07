@@ -1,94 +1,47 @@
-# streamlit_app.py
-
 import streamlit as st
-import traceback
+import pandas as pd
+import os
+from aligner import process_alignment
 
-# -----------------------------------------------------------------------------
-# 一開始就攔截 import 或語法錯誤
-# -----------------------------------------------------------------------------
-try:
-    import pandas as pd
-    import nltk
+st.set_page_config(page_title="Word Aligner App", layout="wide")
+st.title("🧠 Vocabulary Aligner")
+st.markdown("上傳含有英文單字與例句的 Excel/CSV 檔案，系統會自動標註單字在句子中的出現位置。")
 
-    # 如果有其他第三方 lib 也在這裡 import
-    from run_batch import run_alignment_batch
+uploaded_file = st.file_uploader("📤 請上傳檔案（支援 .xlsx, .csv）", type=["xlsx", "csv"])
 
-    # NLTK punkt tokenizer 下載（只在第一次找不到時執行）
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
+if uploaded_file:
+    st.write("📥 檔案已上傳：", uploaded_file.name)
 
-except Exception:
-    st.set_page_config(page_title="Error Loading App")
-    st.error("🚨 應用程式載入階段發生錯誤（ImportError 或 SyntaxError）！")
-    st.text(traceback.format_exc())
-    st.stop()
+    with st.spinner("🔄 正在處理資料，請稍候..."):
+        # 儲存上傳檔案
+        temp_path = os.path.join("/tmp", uploaded_file.name)
+        with open(temp_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
 
-# -----------------------------------------------------------------------------
-# Streamlit 頁面設定
-# -----------------------------------------------------------------------------
-st.set_page_config(page_title="Word-Example Aligner Tool (Gemini 版)")
+        try:
+            # 判斷檔案格式並讀取
+            if uploaded_file.name.endswith(".xlsx"):
+                df = pd.read_excel(temp_path)
+            else:
+                df = pd.read_csv(temp_path)
 
-# -----------------------------------------------------------------------------
-# 主程式
-# -----------------------------------------------------------------------------
-def main():
-    st.title("📚 Word-Example Aligner Tool (Gemini 模式)")
+            # 執行對齊處理
+            result_df = process_alignment(df)
 
-    upload = st.file_uploader("📎 上傳 CSV 或 Excel 檔案", type=["csv", "xlsx"])
-    if not upload:
-        return
+            # 顯示部分結果預覽
+            st.success("✅ 處理完成！以下為前 10 筆結果預覽：")
+            st.dataframe(result_df.head(10))
 
-    # 讀檔
-    if upload.name.endswith(".csv"):
-        df = pd.read_csv(upload)
-    else:
-        df = pd.read_excel(upload)
+            # 提供下載
+            csv = result_df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                label="📥 下載完整結果 CSV",
+                data=csv,
+                file_name="aligned_result.csv",
+                mime="text/csv"
+            )
 
-    st.write("🔍 原始資料預覽：")
-    st.dataframe(df.head())
-
-    # 欄位選擇
-    col_word = st.selectbox("🔤 選擇「單字或片語」欄位", df.columns)
-    col_basic = st.selectbox("🟢 選擇「基礎例句」欄位", df.columns)
-    col_adv = st.selectbox("🔵 選擇「進階例句」欄位", df.columns)
-    use_ai = st.checkbox("🤖 啟用 Gemini 模式（NLP 無法處理時，自動補足）", value=True)
-
-    # 執行按鈕
-    if st.button("🚀 執行對齊"):
-        with st.spinner("正在處理，請稍候..."):
-            result = run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=use_ai)
-
-        st.success("✅ 處理完成！")
-        st.dataframe(
-            result[
-                [
-                    "word_or_phrase",
-                    col_basic,
-                    col_adv,
-                    "index_combined",
-                    "match_form_combined",
-                    "status_combined",
-                ]
-            ].head(20)
-        )
-
-        csv = result.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ 下載對齊結果 CSV",
-            csv,
-            "aligned_result.csv",
-            "text/csv",
-        )
-
-# -----------------------------------------------------------------------------
-# Entry point：攔截執行階段的錯誤並顯示完整 Traceback
-# -----------------------------------------------------------------------------
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception:
-        st.error("🚨 應用程式執行階段發生錯誤！")
-        st.text(traceback.format_exc())
-        st.stop()
+        except Exception as e:
+            st.error(f"❌ 發生錯誤：{e}")
+else:
+    st.info("請先上傳檔案以開始處理。")
