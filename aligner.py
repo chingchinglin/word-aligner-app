@@ -1,14 +1,14 @@
+
 import os
 from dotenv import load_dotenv
 load_dotenv()
-
 
 import re
 import google.generativeai as genai
 from nltk.stem import WordNetLemmatizer
 
 lemmatizer = WordNetLemmatizer()
-genai.configure(api_key="YOUR_GEMINI_API_KEY")  # 替換為你的金鑰或使用環境變數
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def clean_and_tokenize(sentence):
     sentence = re.sub(r"\b(\w+)'s\b", r"\1", sentence)
