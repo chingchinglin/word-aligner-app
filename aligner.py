@@ -1,6 +1,7 @@
+import spacy
 import nltk
 
-# 自動下載必要 nltk 資源
+# 自動下載必要 nltk 資源（避免 LookupError）
 nltk_dependencies = [
     ("tokenizers/punkt", "punkt"),
     ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
@@ -11,65 +12,32 @@ for path, pkg in nltk_dependencies:
     try:
         nltk.data.find(path)
     except LookupError:
-        nltk.download(pkg)
+        nltk.download(pkg, quiet=True)
 
-
-
-import re
-import pandas as pd
+from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-import spacy
 
-# 載入 spaCy 的英文模型（第一次需用: python -m spacy download en_core_web_sm）
-nlp = spacy.load("en_core_web_sm")
+
 lemmatizer = WordNetLemmatizer()
+nlp = spacy.load("en_core_web_sm")
 
-def clean_and_tokenize(sentence):
-    # 移除所有格 's
-    sentence = re.sub(r"\b(\w+)'s\b", r"\1", sentence)
-    # 移除標點
-    sentence = re.sub(r"[^\w\s]", "", sentence)
-    # 分詞
-    tokens = sentence.split()
-    return tokens
+def normalize(word):
+    return lemmatizer.lemmatize(word.lower())
 
-def lemmatize_phrase(phrase):
-    # 同時用 spaCy 和 WordNet 雙重詞形還原
-    doc = nlp(phrase.lower())
-    lemmatized = [lemmatizer.lemmatize(token.lemma_) for token in doc]
-    return lemmatized
+def tokenize(text):
+    return [normalize(w) for w in word_tokenize(text)]
 
-def find_match_indices(word_or_phrase, sentence):
-    tokens = clean_and_tokenize(sentence)
-    lemmatized_sentence = lemmatize_phrase(" ".join(tokens))
-    lemmatized_phrase = lemmatize_phrase(word_or_phrase)
+def find_match_indices(word, sentence):
+    """
+    傳入單字/片語（word）和句子（sentence），回傳開始與結束的索引（1-based）
+    若找不到，則回傳 (-, -)
+    """
+    tokens = tokenize(sentence)
+    word_tokens = tokenize(word)
 
-    len_phrase = len(lemmatized_phrase)
-
-    for i in range(len(lemmatized_sentence) - len_phrase + 1):
-        if lemmatized_sentence[i:i + len_phrase] == lemmatized_phrase:
-            start = i + 1  # 索引從 1 開始
-            end = i + len_phrase
-            matched_form = " ".join(tokens[i:i + len_phrase])
-            return start, end, matched_form, "OK"
-
-    return "-", "-", "-", "人工處理"
-
-def process_dataframe(df):
-    results = []
-
-    for _, row in df.iterrows():
-        word = row['word_or_phrase']
-        sentence = row['sentence']
-        start, end, match_form, status = find_match_indices(word, sentence)
-
-        results.append({
-            'word_or_phrase': word,
-            'sentence': sentence,
-            'mark_start': start,
-            'mark_end': end,
-            'match_form': match_form,
-            'status': status
-        })
-
-    return pd.DataFrame(results)
+    for i in range(len(tokens) - len(word_tokens) + 1):
+        if tokens[i:i + len(word_tokens)] == word_tokens:
+            # 回傳 1-based 索引值
+            return i + 1, i + len(word_tokens)
+    
+    return "-", "-"
