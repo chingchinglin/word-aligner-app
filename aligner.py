@@ -1,7 +1,4 @@
 import re
-import spacy
-
-nlp = spacy.blank("en")
 
 def tokenize(sentence):
     sentence = re.sub(r"[^\w\s]", "", sentence)
@@ -9,8 +6,19 @@ def tokenize(sentence):
     return sentence.strip().split()
 
 def lemmatize(word):
-    doc = nlp(word)
-    return doc[0].lemma_ if doc else word.lower()
+    exceptions = {"ate": "eat", "went": "go", "ran": "run", "was": "be", "were": "be"}
+    word = word.lower()
+    if word in exceptions:
+        return exceptions[word]
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+    if word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    if word.endswith("ed"):
+        return word[:-2]
+    if word.endswith("ing"):
+        return word[:-3]
+    return word
 
 def align_word_in_sentence(word_or_phrase, sentence):
     tokens = tokenize(sentence)
