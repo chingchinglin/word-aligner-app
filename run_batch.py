@@ -1,69 +1,40 @@
-import nltk
-
-# 保險起見加上這段（避免 Streamlit Cloud 沒自動下載）
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-
-import re
+from aligner import find_match_indices
+from gemini_aligner import align_with_ai  # 如果啟用 Gemini 模式
 import pandas as pd
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
-from gemini_aligner import call_gemini_for_alignment
 
-lemmatizer = WordNetLemmatizer()
+def align_single_example(word_or_phrase, sentence, use_ai=False):
+    start, end, match_form, status = find_match_indices(word_or_phrase, sentence)
 
-def normalize(word):
-    return lemmatizer.lemmatize(word.lower())
-
-def tokenize(text):
-    # 移除所有標點符號和所有格
-    text = re.sub(r"[^\w\s]", "", text)
-    text = re.sub(r"\b(\w+)s\b", r"\1", text)  # 簡單處理所有格 's
-    return [normalize(w) for w in word_tokenize(text)]
-
-def align_single_example(word_or_phrase, sentence, use_ai=True):
-    phrase_tokens = tokenize(word_or_phrase)
-    sentence_tokens = tokenize(sentence)
-
-    phrase_len = len(phrase_tokens)
-
-    for i in range(len(sentence_tokens) - phrase_len + 1):
-        if sentence_tokens[i:i + phrase_len] == phrase_tokens:
-            return i + 1, i + phrase_len, "對齊成功 ✅"
-
-    # 詞形沒對上，自動轉 Gemini
-    if use_ai:
-        ai_result = call_gemini_for_alignment(word_or_phrase, sentence)
+    # 若 NLP 模組找不到，使用 Gemini 補齊
+    if use_ai and status == "人工處理":
+        ai_result = align_with_ai(word_or_phrase, sentence)
         if ai_result:
-            return ai_result["start_index"], ai_result["end_index"], "AI補足 ✅"
+            start, end, match_form, status = ai_result
 
-    return "-", "-", "人工處理 🔧"
+    return pd.Series([start, end, match_form, status])
 
-def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=True):
-    # 對基礎例句處理
+def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=False):
+    # 對基礎句處理
     basic_results = df.apply(
         lambda row: align_single_example(row[col_word], row[col_basic], use_ai),
         axis=1
     )
-    df["basic_start"] = basic_results.apply(lambda x: x[0])
-    df["basic_end"] = basic_results.apply(lambda x: x[1])
-    df["basic_status"] = basic_results.apply(lambda x: x[2])
+    basic_results.columns = [
+        "mark_start_basic", "mark_end_basic", "match_form_basic", "status_basic"
+    ]
 
-    # 對進階例句處理
+    # 對進階句處理
     adv_results = df.apply(
         lambda row: align_single_example(row[col_word], row[col_adv], use_ai),
         axis=1
     )
-    df["adv_start"] = adv_results.apply(lambda x: x[0])
-    df["adv_end"] = adv_results.apply(lambda x: x[1])
-    df["adv_status"] = adv_results.apply(lambda x: x[2])
+    adv_results.columns = [
+        "mark_start_adv", "mark_end_adv", "match_form_adv", "status_adv"
+    ]
 
-    # 合併欄位方便顯示
-    df["index_combined"] = df["basic_start"].astype(str) + " / " + df["adv_start"].astype(str)
-    df["match_form_combined"] = df["basic_end"].astype(str) + " / " + df["adv_end"].astype(str)
-    df["status_combined"] = df["basic_status"] + " / " + df["adv_status"]
+    # 整合欄位
+    df["index_combined"] = basic_results["mark_start_basic"].astype(str) + " / " + adv_results["mark_start_adv"].astype(str)
+    df["match_form_combined"] = basic_results["match_form_basic"] + " / " + adv_results["match_form_adv"]
+    df["status_combined"] = basic_results["status_basic"] + " / " + adv_results["status_adv"]
 
-    return df
+    return pd.concat([df, basic_results, adv_results], axis=1)
