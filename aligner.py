@@ -1,7 +1,8 @@
-import spacy
 import nltk
+import spacy
+import subprocess
 
-# 自動下載必要 nltk 資源（避免 LookupError）
+# 自動下載必要 nltk 資源
 nltk_dependencies = [
     ("tokenizers/punkt", "punkt"),
     ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
@@ -14,30 +15,19 @@ for path, pkg in nltk_dependencies:
     except LookupError:
         nltk.download(pkg, quiet=True)
 
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+# 自動下載 spaCy 模型（如未安裝）
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+    nlp = spacy.load("en_core_web_sm")
 
+def find_match_indices(word_or_phrase, sentence):
+    tokens = nltk.word_tokenize(sentence)
+    word_list = nltk.word_tokenize(word_or_phrase)
 
-lemmatizer = WordNetLemmatizer()
-nlp = spacy.load("en_core_web_sm")
+    for i in range(len(tokens) - len(word_list) + 1):
+        if tokens[i:i + len(word_list)] == word_list:
+            return i + 1, i + len(word_list)  # 索引從 1 開始
 
-def normalize(word):
-    return lemmatizer.lemmatize(word.lower())
-
-def tokenize(text):
-    return [normalize(w) for w in word_tokenize(text)]
-
-def find_match_indices(word, sentence):
-    """
-    傳入單字/片語（word）和句子（sentence），回傳開始與結束的索引（1-based）
-    若找不到，則回傳 (-, -)
-    """
-    tokens = tokenize(sentence)
-    word_tokens = tokenize(word)
-
-    for i in range(len(tokens) - len(word_tokens) + 1):
-        if tokens[i:i + len(word_tokens)] == word_tokens:
-            # 回傳 1-based 索引值
-            return i + 1, i + len(word_tokens)
-    
-    return "-", "-"
+    return -1, -1
