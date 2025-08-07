@@ -1,4 +1,5 @@
-spacy==3.7.1
+streamlit
 pandas
+openpyxl
+spacy
 nltk
-google-generativeai
