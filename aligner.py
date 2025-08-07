@@ -1,9 +1,7 @@
 import re
 import spacy
-from nltk.stem import WordNetLemmatizer
 
 nlp = spacy.load("en_core_web_sm")
-lemmatizer = WordNetLemmatizer()
 
 def tokenize(sentence):
     sentence = re.sub(r"[^\w\s]", "", sentence)
@@ -11,7 +9,8 @@ def tokenize(sentence):
     return sentence.strip().split()
 
 def lemmatize(word):
-    return lemmatizer.lemmatize(word.lower())
+    doc = nlp(word)
+    return doc[0].lemma_.lower()
 
 def align_word_in_sentence(word_or_phrase, sentence):
     tokens = tokenize(sentence)
