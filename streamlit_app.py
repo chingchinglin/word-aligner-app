@@ -1,3 +1,8 @@
+import nltk
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+
+
 import re
 import spacy
 from nltk.stem import WordNetLemmatizer
