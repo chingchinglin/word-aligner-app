@@ -1,47 +1,46 @@
 import streamlit as st
 import pandas as pd
-import os
-from aligner import process_alignment
+from run_batch import process_file
 
-st.set_page_config(page_title="Word Aligner App", layout="wide")
-st.title("🧠 Vocabulary Aligner")
-st.markdown("上傳含有英文單字與例句的 Excel/CSV 檔案，系統會自動標註單字在句子中的出現位置。")
+st.set_page_config(page_title="單字與例句對齊工具", layout="wide")
 
-uploaded_file = st.file_uploader("📤 請上傳檔案（支援 .xlsx, .csv）", type=["xlsx", "csv"])
+# UI 顯示區塊
+st.title("📚 單字與例句對齊工具")
+st.markdown("請上傳包含單字與例句的 Excel 或 CSV 檔案，我們會自動標記出單字在例句中的位置。")
+
+uploaded_file = st.file_uploader("請選擇檔案：", type=["xlsx", "csv"])
 
 if uploaded_file:
-    st.write("📥 檔案已上傳：", uploaded_file.name)
+    try:
+        # 自動判斷副檔名
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
 
-    with st.spinner("🔄 正在處理資料，請稍候..."):
-        # 儲存上傳檔案
-        temp_path = os.path.join("/tmp", uploaded_file.name)
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        st.success("✅ 檔案已成功上傳，開始處理中⋯⋯")
 
-        try:
-            # 判斷檔案格式並讀取
-            if uploaded_file.name.endswith(".xlsx"):
-                df = pd.read_excel(temp_path)
-            else:
-                df = pd.read_csv(temp_path)
+        # 執行處理
+        processed_df = process_file(df)
 
-            # 執行對齊處理
-            result_df = process_alignment(df)
+        # 顯示處理後結果
+        st.markdown("### 🔍 標註結果預覽")
+        st.dataframe(processed_df)
 
-            # 顯示部分結果預覽
-            st.success("✅ 處理完成！以下為前 10 筆結果預覽：")
-            st.dataframe(result_df.head(10))
+        # 提供下載連結
+        @st.cache_data
+        def convert_df(df):
+            return df.to_csv(index=False).encode('utf-8-sig')
 
-            # 提供下載
-            csv = result_df.to_csv(index=False).encode("utf-8-sig")
-            st.download_button(
-                label="📥 下載完整結果 CSV",
-                data=csv,
-                file_name="aligned_result.csv",
-                mime="text/csv"
-            )
+        csv = convert_df(processed_df)
+        st.download_button(
+            label="📥 下載標註結果 (CSV)",
+            data=csv,
+            file_name="aligned_result.csv",
+            mime="text/csv",
+        )
 
-        except Exception as e:
-            st.error(f"❌ 發生錯誤：{e}")
+    except Exception as e:
+        st.error(f"❌ 發生錯誤：{e}")
 else:
-    st.info("請先上傳檔案以開始處理。")
+    st.info("👈 請先上傳檔案開始處理。")
