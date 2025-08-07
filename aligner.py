@@ -1,26 +1,31 @@
+import re
 import spacy
-import pandas as pd
+from nltk.stem import WordNetLemmatizer
 
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    from spacy.cli import download
-    download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")
+lemmatizer = WordNetLemmatizer()
 
-def find_match_indices(word_or_phrase, sentence):
-    def tokenize(text):
-        return [
-            token.text.lower()
-            for token in nlp(text)
-            if not token.is_punct and token.text.lower() != "'s"
-        ]
+def tokenize(sentence):
+    sentence = re.sub(r"[^\w\s]", "", sentence)
+    sentence = re.sub(r"\’s|\‘s|'s", "", sentence)
+    return sentence.strip().split()
 
-    target_tokens = tokenize(word_or_phrase)
-    sentence_tokens = tokenize(sentence)
+def lemmatize(word):
+    return lemmatizer.lemmatize(word.lower())
 
-    for i in range(len(sentence_tokens) - len(target_tokens) + 1):
-        if sentence_tokens[i : i + len(target_tokens)] == target_tokens:
-            return i + 1, i + len(target_tokens)
+def align_word_in_sentence(word_or_phrase, sentence):
+    tokens = tokenize(sentence)
+    lemma_tokens = [lemmatize(tok) for tok in tokens]
 
-    return "-", "-"
+    target_tokens = [lemmatize(w) for w in word_or_phrase.strip().split()]
+    n = len(target_tokens)
+
+    for i in range(len(lemma_tokens) - n + 1):
+        if lemma_tokens[i:i+n] == target_tokens:
+            return i + 1, i + n
+
+    return "-", "-", "人工處理"
+
+def get_example_alignment():
+    # 預設用來讓 Streamlit 可以啟動，不會報錯
+    return align_word_in_sentence("apple", "I ate two apples.")
