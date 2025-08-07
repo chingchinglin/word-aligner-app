@@ -1,56 +1,36 @@
-# aligner.py
-
 import spacy
+import pandas as pd
 
-# -----------------------------------------------------------------------------
-# 1. 載入 spaCy 模型（請務必透過 requirements.txt 事先安裝 en-core-web-sm）
-# -----------------------------------------------------------------------------
 try:
+    # 嘗試載入 spaCy 模型
     nlp = spacy.load("en_core_web_sm")
 except OSError as e:
-    raise RuntimeError(
-        "❌ 找不到 spaCy 模型 en_core_web_sm！\n"
-        "請確認 requirements.txt 已包含：\n"
-        "    en-core-web-sm @ "
-        "https://github.com/explosion/spacy-models/"
-        "releases/download/en_core_web_sm-3.7.1/"
-        "en_core_web_sm-3.7.1.tar.gz\n"
-        "然後重新部署。"
-    ) from e
+    raise RuntimeError("❗️spaCy 模型 'en_core_web_sm' 尚未安裝。請確認 requirements.txt 中有正確的 tar.gz 下載連結。") from e
 
-# -----------------------------------------------------------------------------
-# 2. 定義 find_match_indices(word, sentence)
-#    回傳 (start, end, match_form, status)
-#    - start/end: 1-based token index
-#    - match_form: spaCy 抓到的原文切片
-#    - status: "NLP" 或 "人工處理"
-# -----------------------------------------------------------------------------
-def find_match_indices(word: str, sentence: str):
+def find_match_indices(word_or_phrase, sentence):
     """
-    找出 word_or_phrase 在 sentence 中的起訖索引（1-based），
-    若找不到就回 ("", "", "", "人工處理")。
+    根據輸入的單字或片語，在句子中找到詞彙起始與結束的索引位置（從1開始計數）。
+    若找不到，則回傳 -1, -1。
     """
+
+    def normalize(text):
+        return text.lower().replace("’s", "").replace("'s", "").replace("’", "").replace("'", "")
+
+    # 預處理：標點符號與所有格處理
+    exclude_tokens = {",", ".", "?", "!", ";", ":", "\"", "'", "(", ")", "[", "]", "{", "}", "-", "–", "—", "…"}
     doc = nlp(sentence)
-    word_lower = word.lower().strip()
-    tokens = [token for token in doc]
+    tokens = [token.text for token in doc if token.text not in exclude_tokens]
 
-    # ---- 1) 詞形還原單字匹配 ----
-    for token in tokens:
-        if token.lemma_.lower() == word_lower or token.text.lower() == word_lower:
-            start = token.i + 1
-            end = start
-            return start, end, token.text, "NLP"
+    # 詞彙還原
+    lemma_tokens = [token.lemma_.lower() for token in doc if token.text not in exclude_tokens]
+    lemma_target = [token.lemma_.lower() for token in nlp(word_or_phrase)]
 
-    # ---- 2) 片語連續匹配 ----
-    phrase = word_lower.split()
-    length = len(phrase)
-    for i in range(len(tokens) - length + 1):
-        lemmas = [tk.lemma_.lower() for tk in tokens[i : i + length]]
-        if lemmas == phrase:
-            start = i + 1
-            end = i + length
-            match_form = " ".join([tk.text for tk in tokens[i : i + length]])
-            return start, end, match_form, "NLP"
+    # 滑動視窗找片語
+    for i in range(len(lemma_tokens) - len(lemma_target) + 1):
+        window = lemma_tokens[i:i + len(lemma_target)]
+        if window == lemma_target:
+            start = i + 1  # 索引從1開始
+            end = start + len(lemma_target) - 1
+            return start, end
 
-    # ---- 3) 都找不到，回傳人工處理 ----
-    return "", "", "", "人工處理"
+    return -1, -1  # 若找不到則回傳 -1
