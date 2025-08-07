@@ -1,3 +1,11 @@
+import nltk
+
+# 自動下載 punkt（如果還沒下載的話）
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
 import re
 import pandas as pd
 from nltk.stem import WordNetLemmatizer
