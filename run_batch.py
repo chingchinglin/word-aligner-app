@@ -1,73 +1,61 @@
-import pandas as pd
 import re
-import nltk
+import pandas as pd
 from nltk.stem import WordNetLemmatizer
-
-# ⛑️ 自動下載需要的資源（避免 LookupError）
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
-
-try:
-    nltk.data.find('corpora/omw-1.4')
-except LookupError:
-    nltk.download('omw-1.4')
+from nltk.tokenize import wordpunct_tokenize
 
 lemmatizer = WordNetLemmatizer()
 
-# ✅ 文本標準化（去除標點、還原詞形）
 def normalize(word):
     return lemmatizer.lemmatize(word.lower())
 
-# ✅ 分詞並標準化（不含標點）
 def tokenize(text):
-    return [normalize(w) for w in nltk.word_tokenize(re.sub(r"[^\w\s]", "", text))]
+    return [normalize(w) for w in wordpunct_tokenize(text)]
 
-# ✅ 比對邏輯（找出 word_or_phrase 在 sentence 中的位置）
 def align_single_example(word_or_phrase, sentence, use_ai=False):
     phrase_tokens = tokenize(word_or_phrase)
     sentence_tokens = tokenize(sentence)
 
-    for i in range(len(sentence_tokens) - len(phrase_tokens) + 1):
-        window = sentence_tokens[i:i + len(phrase_tokens)]
+    phrase_len = len(phrase_tokens)
+    sentence_len = len(sentence_tokens)
+
+    for i in range(sentence_len - phrase_len + 1):
+        window = sentence_tokens[i:i + phrase_len]
         if window == phrase_tokens:
-            return i + 1, i + len(phrase_tokens), "匹配 ✅"
+            return i + 1, i + phrase_len, "匹配"  # 索引從 1 開始
 
     if use_ai:
         return "-", "-", "AI補足"
     else:
         return "-", "-", "人工處理"
 
-# ✅ 批次處理函數
 def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=False):
-    # 基礎例句對齊
     basic_results = df.apply(
         lambda row: align_single_example(row[col_word], row[col_basic], use_ai),
         axis=1
     )
-    df["basic_start"] = basic_results.apply(lambda x: x[0])
-    df["basic_end"] = basic_results.apply(lambda x: x[1])
-    df["basic_status"] = basic_results.apply(lambda x: x[2])
-
-    # 進階例句對齊
     adv_results = df.apply(
         lambda row: align_single_example(row[col_word], row[col_adv], use_ai),
         axis=1
     )
-    df["adv_start"] = adv_results.apply(lambda x: x[0])
-    df["adv_end"] = adv_results.apply(lambda x: x[1])
-    df["adv_status"] = adv_results.apply(lambda x: x[2])
 
-    # 合併顯示欄位
-    df["index_combined"] = df["basic_start"].astype(str) + "~" + df["basic_end"].astype(str) + " / " + df["adv_start"].astype(str) + "~" + df["adv_end"].astype(str)
-    df["match_form_combined"] = df["basic_status"] + " / " + df["adv_status"]
-    df["status_combined"] = df.apply(lambda row: "✅" if "人工處理" not in row["match_form_combined"] else "🔧", axis=1)
+    df["basic_start"] = [r[0] for r in basic_results]
+    df["basic_end"] = [r[1] for r in basic_results]
+    df["status_basic"] = [r[2] for r in basic_results]
 
+    df["adv_start"] = [r[0] for r in adv_results]
+    df["adv_end"] = [r[1] for r in adv_results]
+    df["status_adv"] = [r[2] for r in adv_results]
+
+    df["index_combined"] = df.apply(lambda row: f"{row['basic_start']}-{row['basic_end']}, {row['adv_start']}-{row['adv_end']}", axis=1)
+    df["match_form_combined"] = df.apply(lambda row: f"{row['status_basic']}, {row['status_adv']}", axis=1)
+
+    def combine_status(row):
+        if row["status_basic"] == row["status_adv"]:
+            return row["status_basic"]
+        else:
+            return f"{row['status_basic']}/{row['status_adv']}"
+
+    df["status_combined"] = df.apply(combine_status, axis=1)
     df["word_or_phrase"] = df[col_word]
+
     return df
