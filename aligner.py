@@ -6,6 +6,13 @@ try:
 except LookupError:
     nltk.download('punkt')
 
+# 另外也補一個 wordnet（避免其他元件也找不到）
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
+
 import re
 import pandas as pd
 from nltk.stem import WordNetLemmatizer
