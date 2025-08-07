@@ -1,51 +1,22 @@
-import re
-from nltk.stem import WordNetLemmatizer
 
-def normalize_sentence(sent):
-    text = re.sub(r"[,.?;:!\"\'\(\)\[\]\{\}\-–—…]", " ", sent)
-    text = re.sub(r"\b(\w+)'s\b", r"\1", text)
-    tokens = text.lower().split()
-    return tokens
+from aligner import process_row
+import pandas as pd
 
-def find_span(target_tokens, sent_tokens):
-    n = len(target_tokens)
-    for i in range(len(sent_tokens) - n + 1):
-        window = sent_tokens[i:i+n]
-        if window == target_tokens:
-            return i+1, i+n  # 1-based index
-    return None
+def run_alignment_batch(df, col_word, col_basic, col_adv, use_ai=False):
+    results = []
 
-def process_row(word, sent):
-    lemmatizer = WordNetLemmatizer()
-    wtoks = [lemmatizer.lemmatize(t) for t in normalize_sentence(word)]
-    stoks = normalize_sentence(sent)
-    stoks_lem = [lemmatizer.lemmatize(t) for t in stoks]
-    span = find_span(wtoks, stoks_lem)
-    if span:
-        s,e = span
-        matched = " ".join(stoks[s-1:e])
-        return s, e, matched, "OK"
-    else:
-        return "-", "-", "-", "人工處理"
+    for _, row in df.iterrows():
+        word = row[col_word]
+        basic_result = process_row(word, row[col_basic], use_ai)
+        adv_result = process_row(word, row[col_adv], use_ai)
 
-def run_alignment_batch(df, col_word, col_basic, col_adv):
-    df["index_combined"] = ""
-    df["match_form_combined"] = ""
-    df["status_combined"] = ""
-    
-    for i, row in df.iterrows():
-        ws = str(row.get(col_word, "")).strip()
-        basic = str(row.get(col_basic, "")).strip()
-        adv = str(row.get(col_adv, "")).strip()
-        
-        b_idx, b_end, b_match, b_stat = process_row(ws, basic) if basic else ("-", "-", "-", "人工處理")
-        a_idx, a_end, a_match, a_stat = process_row(ws, adv) if adv else ("-", "-", "-", "人工處理")
-        
-        idx_comb = f"Basic: {b_idx}-{b_end} | Adv: {a_idx}-{a_end}"
-        match_comb = f"Basic: {b_match} | Adv: {a_match}"
-        stat_comb = f"Basic: {b_stat} | Adv: {a_stat}"
-        
-        df.at[i, "index_combined"] = idx_comb
-        df.at[i, "match_form_combined"] = match_comb
-        df.at[i, "status_combined"] = stat_comb
-    return df
+        results.append({
+            'word_or_phrase': word,
+            col_basic: row[col_basic],
+            col_adv: row[col_adv],
+            "index_combined": f"{basic_result['mark_start']} / {adv_result['mark_start']}",
+            "match_form_combined": f"{basic_result['match_form']} / {adv_result['match_form']}",
+            "status_combined": f"{basic_result['status']} / {adv_result['status']}",
+        })
+
+    return pd.DataFrame(results)
