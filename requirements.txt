@@ -1,5 +1,1 @@
-streamlit
-pandas
-openpyxl
-spacy
-nltk
+spacy==3.5.4
