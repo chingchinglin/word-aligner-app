@@ -1,16 +1,13 @@
 import nltk
 
-# 自動下載 punkt（如果還沒下載的話）
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+# 自動下載 nltk 必要資源（punkt、wordnet、averaged_perceptron_tagger）
+nltk_packages = ["punkt", "wordnet", "averaged_perceptron_tagger"]
 
-# 另外也補一個 wordnet（避免其他元件也找不到）
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
+for pkg in nltk_packages:
+    try:
+        nltk.data.find(f'tokenizers/{pkg}' if pkg == "punkt" else f'corpora/{pkg}')
+    except LookupError:
+        nltk.download(pkg)
 
 
 import re
