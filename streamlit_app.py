@@ -1,33 +1,41 @@
 # streamlit_app.py
 
 import streamlit as st
-import pandas as pd
-import nltk
 import traceback
 
 # -----------------------------------------------------------------------------
-# Streamlit 頁面設定：必須在所有 st.* 之前呼叫
+# 一開始就攔截 import 或語法錯誤
+# -----------------------------------------------------------------------------
+try:
+    import pandas as pd
+    import nltk
+
+    # 如果有其他第三方 lib 也在這裡 import
+    from run_batch import run_alignment_batch
+
+    # NLTK punkt tokenizer 下載（只在第一次找不到時執行）
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+
+except Exception:
+    st.set_page_config(page_title="Error Loading App")
+    st.error("🚨 應用程式載入階段發生錯誤（ImportError 或 SyntaxError）！")
+    st.text(traceback.format_exc())
+    st.stop()
+
+# -----------------------------------------------------------------------------
+# Streamlit 頁面設定
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="Word-Example Aligner Tool (Gemini 版)")
 
 # -----------------------------------------------------------------------------
-# 下載 NLTK punkt tokenizer（只會在雲端第一次執行時跑）
-# -----------------------------------------------------------------------------
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-# -----------------------------------------------------------------------------
-# 核心函式：批次對齊
-# -----------------------------------------------------------------------------
-from run_batch import run_alignment_batch
-
-# -----------------------------------------------------------------------------
-# 主程式邏輯
+# 主程式
 # -----------------------------------------------------------------------------
 def main():
     st.title("📚 Word-Example Aligner Tool (Gemini 模式)")
+
     upload = st.file_uploader("📎 上傳 CSV 或 Excel 檔案", type=["csv", "xlsx"])
     if not upload:
         return
@@ -75,12 +83,12 @@ def main():
         )
 
 # -----------------------------------------------------------------------------
-# Entry point：攔截所有 Exception，並印出 Traceback
+# Entry point：攔截執行階段的錯誤並顯示完整 Traceback
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        st.error("🚨 應用程式執行錯誤，請檢查下面的詳細資訊：")
+        st.error("🚨 應用程式執行階段發生錯誤！")
         st.text(traceback.format_exc())
         st.stop()
